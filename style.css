@@ -1,0 +1,214 @@
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    overscroll-behavior: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    touch-action: none;
+}
+
+/* ---------- start menu ---------- */
+#menu {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+
+#menu .panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    width: min(92vw, 420px);
+    max-height: 100%;
+    padding: 12px 0;
+}
+
+#menu h1 {
+    margin: 0;
+    font: 900 clamp(26px, 5vh, 40px) Arial, sans-serif;
+    letter-spacing: 0.18em;
+    text-shadow: 0 0 18px rgba(45, 125, 255, 0.85);
+}
+
+#bestLine {
+    min-height: 16px;
+    font: bold 14px Arial, sans-serif;
+    letter-spacing: 0.12em;
+    color: rgba(255, 230, 0, 0.9);
+}
+
+#skinPreview {
+    width: clamp(120px, 24vh, 190px);
+    height: clamp(120px, 24vh, 190px);
+    flex: none;
+}
+
+#skinName {
+    font: bold 18px Arial, sans-serif;
+    letter-spacing: 0.06em;
+}
+
+#swatches {
+    display: flex;
+    gap: 14px;
+    min-height: 38px;
+    flex: none;
+}
+
+.swatch {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+}
+.swatch.sel {
+    border-color: #fff;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+}
+
+#skinGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    max-height: 34vh;
+    padding: 4px;
+    overflow-y: auto;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.skin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0 4px;
+    color: #fff;
+    font: 11px Arial, sans-serif;
+    background: rgba(255, 255, 255, 0.07);
+    border: 2px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+}
+.skin.sel {
+    border-color: #2d7dff;
+    background: rgba(45, 125, 255, 0.2);
+    box-shadow: 0 0 12px rgba(45, 125, 255, 0.6);
+}
+
+#startButton {
+    flex: none;
+    margin-top: 4px;
+    padding: 18px 40px;
+    font: bold 24px Arial, sans-serif;
+    color: #fff;
+    background: #2d7dff;
+    border: none;
+    border-radius: 14px;
+}
+
+/* ---------- game over ---------- */
+#gameOver {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    background: rgba(0, 0, 10, 0.45);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+#gameOver.show {
+    display: flex;
+    animation: goFade 0.35s ease-out;
+}
+@keyframes goFade { from { opacity: 0; } to { opacity: 1; } }
+
+#gameOver .panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: min(88vw, 360px);
+}
+
+#gameOver h2 {
+    margin: 0 0 10px;
+    font: 900 clamp(24px, 4.5vh, 36px) Arial, sans-serif;
+    letter-spacing: 0.18em;
+    text-shadow: 0 0 18px rgba(45, 125, 255, 0.85);
+}
+
+#goLabel {
+    font: bold 18px Arial, sans-serif;
+    letter-spacing: 0.2em;
+    color: rgba(255, 230, 0, 0.7);
+}
+
+#goScore {
+    font: bold clamp(72px, 14vh, 120px) Arial, sans-serif;
+    line-height: 1.05;
+    color: #ffe600;
+    text-shadow: 0 0 22px rgba(255, 230, 0, 0.65);
+}
+
+#goBest {
+    min-height: 22px;
+    font: bold 18px Arial, sans-serif;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.75);
+}
+#goBest.new { color: #2dff6e; text-shadow: 0 0 12px rgba(45, 255, 110, 0.7); }
+
+.goButtons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-top: 22px;
+}
+.goButtons button {
+    padding: 16px 0;
+    font: bold 22px Arial, sans-serif;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+}
+#restartButton { background: #2d7dff; }
+#backButton { background: rgba(255, 255, 255, 0.14); border: 2px solid rgba(255, 255, 255, 0.3); }

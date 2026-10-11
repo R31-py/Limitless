@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <title>Limitless</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="menu">
+        <div class="panel">
+            <h1>LIMITLESS</h1>
+            <div id="bestLine"></div>
+            <canvas id="skinPreview"></canvas>
+            <div id="skinName"></div>
+            <div id="swatches"></div>
+            <div id="skinGrid" class="scrollable"></div>
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <div id="gameOver">
+        <div class="panel">
+            <h2>GAME OVER</h2>
+            <div id="goLabel">SCORE</div>
+            <div id="goScore">0</div>
+            <div id="goBest"></div>
+            <div class="goButtons">
+                <button id="restartButton">Restart</button>
+                <button id="backButton">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
