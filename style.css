@@ -23,7 +23,6 @@ html, body {
     touch-action: none;
 }
 
-/* ---------- start menu ---------- */
 #menu {
     position: fixed;
     inset: 0;
@@ -137,7 +136,6 @@ html, body {
     border-radius: 14px;
 }
 
-/* ---------- game over ---------- */
 #gameOver {
     position: fixed;
     inset: 0;
@@ -212,3 +210,134 @@ html, body {
 }
 #restartButton { background: #2d7dff; }
 #backButton { background: rgba(255, 255, 255, 0.14); border: 2px solid rgba(255, 255, 255, 0.3); }
+
+select {
+    width: 100%;
+    padding: 12px 8px;
+    font: bold 16px Arial, sans-serif;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#howButton {
+    flex: none;
+    padding: 10px 28px;
+    font: bold 16px Arial, sans-serif;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+#howTo {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    background: rgba(0, 0, 10, 0.6);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+#howTo.show {
+    display: flex;
+    animation: goFade 0.25s ease-out;
+}
+
+.howPanel {
+    display: flex;
+    flex-direction: column;
+    width: min(94vw, 460px);
+    max-height: 100%;
+    background: rgba(8, 14, 40, 0.96);
+    border: 2px solid rgba(45, 125, 255, 0.6);
+    border-radius: 18px;
+    box-shadow: 0 0 28px rgba(45, 125, 255, 0.45);
+    overflow: hidden;
+}
+
+.howHead {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.howHead h2 {
+    margin: 0;
+    font: 900 22px Arial, sans-serif;
+    letter-spacing: 0.16em;
+    text-shadow: 0 0 14px rgba(45, 125, 255, 0.85);
+}
+#howClose {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    color: #fff;
+    font: bold 18px Arial, sans-serif;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.howBody {
+    overflow-y: auto;
+    padding: 4px 16px 18px;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.howBody h3 {
+    margin: 18px 0 8px;
+    font: bold 13px Arial, sans-serif;
+    letter-spacing: 0.2em;
+    color: rgba(255, 230, 0, 0.85);
+}
+.howBody p {
+    margin: 10px 0;
+    font: 14px/1.45 Arial, sans-serif;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.howList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.howList li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+}
+.howList svg {
+    flex: none;
+    width: 44px;
+    height: 44px;
+}
+.howList b {
+    display: block;
+    margin-bottom: 2px;
+    font: bold 15px Arial, sans-serif;
+}
+.howList span {
+    font: 13px/1.4 Arial, sans-serif;
+    color: rgba(255, 255, 255, 0.8);
+}

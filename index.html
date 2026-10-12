@@ -15,12 +15,19 @@
     <div id="menu">
         <div class="panel">
             <h1>LIMITLESS</h1>
+            <select id="musicSelect" name="musicSelect">
+                <option value="none">No Music</option>
+                <option value="music1.mp3">Music 1</option>
+                <option value="music2.mp3">Music 2</option>
+                <option value="music3.mp3">Music 3</option>
+            </select>
             <div id="bestLine"></div>
             <canvas id="skinPreview"></canvas>
             <div id="skinName"></div>
             <div id="swatches"></div>
             <div id="skinGrid" class="scrollable"></div>
             <button id="startButton">Start Game</button>
+            <button id="howButton">How to Play</button>
         </div>
     </div>
 
@@ -33,6 +40,74 @@
             <div class="goButtons">
                 <button id="restartButton">Restart</button>
                 <button id="backButton">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="howTo" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+        <div class="howPanel">
+            <div class="howHead">
+                <h2 id="howTitle">HOW TO PLAY</h2>
+                <button id="howClose" aria-label="Close">&#10005;</button>
+            </div>
+            <div class="howBody scrollable">
+                <p>Climb as high as you can. Press anywhere, drag <b>away</b> from where you want to go and let go. You shoot the opposite way, like a slingshot. The longer the drag, the harder the shot. The dotted guide turns from green (weak) to red (full power).</p>
+                <p>You can only aim while you rest in a bubble, are stuck to goo, or are frozen. Fall off the bottom of the screen and the run is over.</p>
+
+                <h3>YOU &amp; THE WORLD</h3>
+                <ul class="howList">
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="12" fill="#ffc21a"/><ellipse cx="15" cy="14.5" rx="4" ry="2.2" fill="#fff" opacity=".55" transform="rotate(-40 15 14.5)"/></svg>
+                        <div><b>You</b><span>The ball. Gravity pulls you down the whole time, so every shot is an arc. Pick your skin on the start screen.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="rgba(140,210,255,.12)" stroke="#bfe9ff" stroke-width="2"/><ellipse cx="13.5" cy="13" rx="3.5" ry="2" fill="#fff" opacity=".5" transform="rotate(-40 13.5 13)"/></svg>
+                        <div><b>Bubble</b><span>Fly into one to catch it. Rest safely inside and aim your next shot. The bubble pops when you launch, so there is no going back.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><rect x="5" y="2" width="16" height="36" fill="#0d2366"/><line x1="21" y1="2" x2="21" y2="38" stroke="#00f0ff" stroke-width="3"/><path d="M5 12 Q13 8 21 12 M5 22 Q13 18 21 22 M5 32 Q13 28 21 32" stroke="#00f0ff" stroke-width="1.2" fill="none" opacity=".7"/></svg>
+                        <div><b>Side walls</b><span>Solid. You bounce off and keep about two thirds of your speed.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><rect x="5" y="2" width="10" height="36" fill="#0d2366"/><rect x="15" y="6" width="9" height="28" rx="4.5" fill="#27c6ff"/><rect x="18" y="9" width="3" height="22" rx="1.5" fill="#fff" opacity=".45"/></svg>
+                        <div><b>Sticky goo (blue)</b><span>Touch it and you stick. From there you can aim again, just like inside a bubble.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><rect x="5" y="2" width="10" height="36" fill="#0d2366"/><rect x="15" y="10" width="9" height="20" rx="4.5" fill="#2dff6e"/><polyline points="18,15 21,20 18,25" fill="none" stroke="#eafff0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <div><b>Bouncer (green)</b><span>A springy pad on the wall. It throws you back faster than you hit it. Skim along it at a shallow angle and it flings you straight up.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="rgba(255,16,240,.18)" stroke="#ff10f0" stroke-width="3"/><polyline points="13,13 20,20 13,27" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><polyline points="21,13 28,20 21,27" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <div><b>Booster (pink)</b><span>Fly through it to be blasted at high speed in the direction of your last shot. The arrows show that direction. One use only.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><polygon points="20,3 33,20 20,37 7,20" fill="#0d2366" stroke="#00f0ff" stroke-width="3" stroke-linejoin="round"/><path d="M33 20 L20 37" stroke="#27c6ff" stroke-width="5" stroke-linecap="round"/></svg>
+                        <div><b>Floating obstacles</b><span>Dark circles and diamonds that start to appear as you climb. You bounce off them and lose speed. If one has a blue patch, you only stick when you hit that part.</span></div>
+                    </li>
+                </ul>
+
+                <h3>PICKUPS</h3>
+                <ul class="howList">
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="11" fill="#ffe600"/><circle cx="20" cy="20" r="6" fill="#fff" opacity=".55"/></svg>
+                        <div><b>Coin</b><span>Worth +50 score. Grab several in quick succession and the pickup sound climbs in pitch.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="rgba(8,14,40,.8)" stroke="#6fe6ff" stroke-width="3"/><g stroke="#eafcff" stroke-width="2" stroke-linecap="round"><line x1="20" y1="9" x2="20" y2="31"/><line x1="10.5" y1="14.5" x2="29.5" y2="25.5"/><line x1="10.5" y1="25.5" x2="29.5" y2="14.5"/></g></svg>
+                        <div><b>Freeze power-up</b><span>A rare floating pickup. Collect it, then tap its icon while you are flying to stop dead in mid-air. Then aim and shoot again.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="rgba(8,14,40,.8)" stroke="#ffa51f" stroke-width="3"/><g fill="#fff"><circle cx="11.5" cy="26" r="2.6"/><circle cx="16" cy="19" r="2.3"/><circle cx="21.5" cy="15" r="2"/><circle cx="27" cy="14.5" r="1.7"/></g></svg>
+                        <div><b>Trajectory power-up</b><span>Collect it and tap its icon to arm it. Your next aim shows the whole predicted path, including bounces and where you will land. It is used up when you shoot.</span></div>
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 40 40"><g fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.6" stroke-dasharray="3 3"><circle cx="8" cy="20" r="6"/><circle cx="20" cy="20" r="6"/><circle cx="32" cy="20" r="6"/></g></svg>
+                        <div><b>Power-up slots</b><span>The three circles at the bottom of the screen. Dimmed icons cannot be used right now (Freeze needs you to be in the air).</span></div>
+                    </li>
+                </ul>
+
+                <h3>SCORE</h3>
+                <p>Score is the height you have climbed plus 50 for every coin. The screen shows your score, your BEST, your HEIGHT and your COINS. The wall lines slowly change color the higher you get.</p>
             </div>
         </div>
     </div>

@@ -1,26 +1,23 @@
 "use strict";
 
-/* =========================================================
-   CANVAS / VIEW  (fixed virtual width, height follows screen)
-   ========================================================= */
 const cvx = document.getElementById("canvas");
 const ctx = cvx.getContext("2d");
 const startBtn = document.getElementById("startButton");
 
-const VIRTUAL_W = 720;                 // game units across the screen width
+const VIRTUAL_W = 720;
 const view = { w: VIRTUAL_W, h: 1280, scale: 1, dpr: 1 };
 
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const cssW = window.innerWidth, cssH = window.innerHeight;
-    cvx.width = Math.round(cssW * dpr);       // physical pixels = sharp
+    cvx.width = Math.round(cssW * dpr);
     cvx.height = Math.round(cssH * dpr);
     view.dpr = dpr;
     view.scale = cssW / VIRTUAL_W;
     view.w = VIRTUAL_W;
     view.h = cssH / view.scale;
     ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, 0, 0);
-    ctx.imageSmoothingEnabled = true;         // reset by canvas resize, so set here
+    ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 }
 window.addEventListener("resize", resize);
@@ -28,11 +25,6 @@ window.addEventListener("orientationchange", () => setTimeout(resize, 100));
 if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
 resize();
 
-/* =========================================================
-   ASSET LOADER
-   Add files to ASSET_MANIFEST. Missing files get a magenta
-   placeholder so the game never crashes.
-   ========================================================= */
 const ASSET_MANIFEST = {
     background: "assets/background.png",
     player: "assets/player.png",
@@ -73,15 +65,21 @@ const Assets = {
     has(key) { return !!this.loaded[key]; },
 };
 
-const SOUND_MANIFEST = {
-    music:  "background.mp3",
+const music_selected = document.getElementById("musicSelect");
+const SOUND_MANIFEST = {};
+
+const onMusicPick = () => {
+    Store.set("music", music_selected.value);
+    Sound.playMusic(music_selected.value);
 };
+music_selected.addEventListener("input", onMusicPick);
+music_selected.addEventListener("change", onMusicPick);
 
 const Sound = {
     ctx: null, master: null, musicGain: null, musicSrc: null, sfx: null, noiseBuf: null,
     raw: {}, buffers: {}, muted: false, last: {},
 
-    async load(manifest) {                 // fetch files (decoded later, after the first tap)
+    async load(manifest) {
         await Promise.all(Object.entries(manifest).map(async ([key, src]) => {
             try {
                 const res = await fetch(src);
@@ -91,7 +89,7 @@ const Sound = {
         }));
     },
 
-    unlock() {                             // call from a tap/click handler (browsers require it)
+    unlock() {
         if (!this.ctx) {
             const AC = window.AudioContext || window.webkitAudioContext;
             if (!AC) return Promise.resolve();
@@ -100,7 +98,7 @@ const Sound = {
             this.musicGain = this.ctx.createGain(); this.musicGain.connect(this.master);
             this.sfx = this.ctx.createGain(); this.sfx.gain.value = 0.8; this.sfx.connect(this.master);
             const n = this.ctx.sampleRate, nb = this.ctx.createBuffer(1, n, n), d = nb.getChannelData(0);
-            for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;      // 1s of white noise for whooshes / thumps
+            for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
             this.noiseBuf = nb;
         }
         return Promise.resolve(this.ctx.resume && this.ctx.resume()).then(() => this.decodeAll());
@@ -118,22 +116,21 @@ const Sound = {
     play(name, { volume = 1, rate = 1 } = {}) {
         if (!this.ctx || this.muted) return;
         const buf = this.buffers[name];
-        if (buf) {                                         // a file override exists -> play it
+        if (buf) {
             const src = this.ctx.createBufferSource(), g = this.ctx.createGain();
             src.buffer = buf; src.playbackRate.value = rate; g.gain.value = volume;
             src.connect(g); g.connect(this.master);
             src.start(0);
             return;
         }
-        const fn = this.synth[name];                       // otherwise use the built-in synthesised effect
+        const fn = this.synth[name];
         if (!fn) return;
         const now = this.ctx.currentTime;
-        if (now - (this.last[name] || 0) < 0.04) return;   // avoid machine-gunning the same sound
+        if (now - (this.last[name] || 0) < 0.04) return;
         this.last[name] = now;
         fn.call(this, volume, rate);
     },
 
-    // --- tiny synth ---
     tone({ f0, f1 = f0, dur = 0.15, type = "sine", vol = 0.3, delay = 0, attack = 0.004, curve = null }) {
         const c = this.ctx, t = c.currentTime + delay, v = Math.max(vol, 0.001);
         const osc = c.createOscillator(), g = c.createGain();
@@ -163,95 +160,110 @@ const Sound = {
         src.start(t, Math.random() * 0.4); src.stop(t + dur + 0.03);
     },
     synth: {
-        // launch: airy whoosh + rising chirp (louder / higher with a stronger pull)
+
         shoot(v, r) {
             this.noise({ dur: 0.2, vol: 0.28 * v, type: "bandpass", f0: 500 * r, f1: 2600 * r, q: 1.2 });
             this.tone({ f0: 260 * r, f1: 620 * r, dur: 0.14, type: "triangle", vol: 0.18 * v });
         },
-        // entering a bubble: soft rising bloop
+
         bubble() {
             this.tone({ f0: 320, f1: 760, dur: 0.14, vol: 0.28 });
             this.tone({ f0: 640, f1: 1500, dur: 0.1, vol: 0.08, delay: 0.02 });
         },
-        // coin: two-note "ding" (pitch climbs with the combo through `rate`)
+
         coin(v, r) {
             this.tone({ f0: 988 * r, dur: 0.07, type: "square", vol: 0.1 });
             this.tone({ f0: 1319 * r, dur: 0.28, type: "square", vol: 0.1, delay: 0.07 });
         },
-        // sticking to goo: wet splat
+
         stick() {
             this.noise({ dur: 0.18, vol: 0.35, type: "lowpass", f0: 1500, f1: 150 });
             this.tone({ f0: 200, f1: 70, dur: 0.18, vol: 0.3 });
         },
-        // game over: falling wobble
+
         lose() {
             this.tone({ f0: 420, f1: 70, dur: 0.8, type: "sawtooth", vol: 0.16 });
             this.tone({ f0: 210, f1: 35, dur: 0.8, type: "square", vol: 0.09 });
             this.noise({ dur: 0.5, vol: 0.15, type: "lowpass", f0: 800, f1: 100, delay: 0.1 });
         },
-        // wall / obstacle bounce: dull thump (volume follows impact speed)
+
         bounce(v) {
             this.tone({ f0: 230, f1: 80, dur: 0.13, vol: 0.4 * v });
             this.noise({ dur: 0.07, vol: 0.25 * v, type: "lowpass", f0: 900, f1: 200 });
         },
-        // green bouncer: springy "boing"
+
         spring() {
             this.tone({ dur: 0.38, type: "triangle", vol: 0.3, curve: [260, 640, 420, 700, 520, 720, 600, 700] });
             this.tone({ f0: 520, f1: 1040, dur: 0.12, vol: 0.1 });
         },
-        // power-up picked up: bright three-note arpeggio
+
         power() { [660, 880, 1320].forEach((f, i) => this.tone({ f0: f, dur: 0.16, type: "triangle", vol: 0.18, delay: i * 0.07 })); },
-        // freeze: icy downward shimmer
+
         freeze() {
             this.tone({ f0: 2200, f1: 500, dur: 0.4, type: "sine", vol: 0.16 });
             this.tone({ f0: 1650, f1: 380, dur: 0.45, type: "triangle", vol: 0.1, delay: 0.03 });
             this.noise({ dur: 0.3, vol: 0.18, type: "highpass", f0: 3000, f1: 6000 });
         },
-        // trajectory shower armed: two-note ping
+
         aim() { this.tone({ f0: 900, f1: 1500, dur: 0.12, vol: 0.2 }); this.tone({ f0: 1500, dur: 0.18, vol: 0.12, delay: 0.1 }); },
-        // booster: rising zap
+
         boost() {
             this.tone({ f0: 180, f1: 1400, dur: 0.32, type: "sawtooth", vol: 0.14 });
             this.noise({ dur: 0.3, vol: 0.2, type: "bandpass", f0: 400, f1: 3500, q: 1.5 });
         },
     },
 
-    music(name, volume = 0.4) {
+    musicToken: 0, musicName: null,
+    async playMusic(name, volume = 0.12) {
+        if (this.musicName === name) return;
         this.stopMusic();
-        const buf = this.buffers[name];
-        if (!this.ctx || !buf) return;
+        if (!name || name === "none") return;
+        this.musicName = name;
+        const token = ++this.musicToken;
+        await this.unlock();
+        if (!this.ctx || token !== this.musicToken) return;
+        let buf = this.buffers[name];
+        if (!buf) {
+            try {
+                const res = await fetch(name);
+                if (!res.ok) throw new Error(res.status);
+                const data = await res.arrayBuffer();
+                buf = await new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail));
+                this.buffers[name] = buf;
+            } catch (err) {
+                console.warn("Music not loaded:", name, err);
+                if (token === this.musicToken) this.musicName = null;
+                return;
+            }
+        }
+        if (token !== this.musicToken) return;
         const src = this.ctx.createBufferSource();
         src.buffer = buf; src.loop = true;
         this.musicGain.gain.value = volume;
         src.connect(this.musicGain); src.start(0);
         this.musicSrc = src;
     },
-    stopMusic() { if (this.musicSrc) { try { this.musicSrc.stop(); } catch (e) {} this.musicSrc = null; } },
+    stopMusic() {
+        this.musicToken++; this.musicName = null;
+        if (this.musicSrc) { try { this.musicSrc.stop(); } catch (e) {} this.musicSrc = null; }
+    },
     setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 1; },
 };
-document.addEventListener("visibilitychange", () => {      // pause audio when the tab/app is hidden
+document.addEventListener("visibilitychange", () => {
     if (!Sound.ctx) return;
     document.hidden ? Sound.ctx.suspend() : Sound.ctx.resume();
 });
 
-/* =========================================================
-   STORAGE  (best score + chosen skin survive reloads)
-   ========================================================= */
 const Store = {
     get(k, d) { try { const v = localStorage.getItem("limitless." + k); return v === null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem("limitless." + k, String(v)); } catch (e) {} },
 };
 let savedBest = Number(Store.get("best", 0)) || 0;
 function saveBest() { if (best > savedBest) { savedBest = best; Store.set("best", best); } }
-setInterval(saveBest, 2000);                                   // cheap safety net while playing
+setInterval(saveBest, 2000);
 window.addEventListener("pagehide", saveBest);
 document.addEventListener("visibilitychange", () => { if (document.hidden) saveBest(); });
 
-/* =========================================================
-   DRAW HELPERS
-   ========================================================= */
-// src = asset key or image. opts: {rotation, flipX, flipY, alpha, anchorX, anchorY}
-// anchor 0..1 (default 0 = top-left, 0.5 = center)
 function drawImage(src, x, y, w, h, opts = {}) {
     const img = typeof src === "string" ? Assets.get(src) : src;
     const w2 = w ?? img.width, h2 = h ?? img.height;
@@ -265,7 +277,6 @@ function drawImage(src, x, y, w, h, opts = {}) {
     ctx.restore();
 }
 
-// Tiles an image vertically across [x, x+w] from y to y+h
 function drawTiledY(src, x, y, w, h, tileH) {
     const img = typeof src === "string" ? Assets.get(src) : src;
     const th = tileH ?? w * (img.height / img.width);
@@ -304,17 +315,10 @@ function drawLine(x1, y1, x2, y2, color = "#fff", lineWidth = 2) {
     ctx.stroke();
 }
 
-/* =========================================================
-   MATH
-   ========================================================= */
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
 
-/* =========================================================
-   COLLIDERS
-   Rect:   {x, y, w, h}      Circle: {x, y, r}
-   ========================================================= */
 const Collide = {
     pointRect: (px, py, r) => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h,
     pointCircle: (px, py, c) => (px - c.x) ** 2 + (py - c.y) ** 2 <= c.r * c.r,
@@ -328,42 +332,34 @@ const Collide = {
         return (c.x - cx) ** 2 + (c.y - cy) ** 2 <= c.r * c.r;
     },
 
-    // Minimum translation vector to push rect `a` out of rect `b`. null if no overlap.
-    // Apply: a.x += mtv.x; a.y += mtv.y
     resolveRectRect(a, b) {
         if (!Collide.rectRect(a, b)) return null;
-        const left = b.x - (a.x + a.w);          // push left  (negative)
-        const right = b.x + b.w - a.x;           // push right (positive)
-        const up = b.y - (a.y + a.h);            // push up    (negative)
-        const down = b.y + b.h - a.y;            // push down  (positive)
+        const left = b.x - (a.x + a.w);
+        const right = b.x + b.w - a.x;
+        const up = b.y - (a.y + a.h);
+        const down = b.y + b.h - a.y;
         const px = Math.abs(left) < right ? left : right;
         const py = Math.abs(up) < down ? up : down;
         return Math.abs(px) < Math.abs(py) ? { x: px, y: 0 } : { x: 0, y: py };
     },
 
-    // Push circle out of rect. Returns {x, y, nx, ny} or null.
     resolveCircleRect(c, r) {
         const cx = clamp(c.x, r.x, r.x + r.w), cy = clamp(c.y, r.y, r.y + r.h);
         let dx = c.x - cx, dy = c.y - cy;
         const d2 = dx * dx + dy * dy;
         if (d2 > c.r * c.r) return null;
-        if (d2 === 0) return { x: 0, y: -c.r, nx: 0, ny: -1 };   // centre inside rect
+        if (d2 === 0) return { x: 0, y: -c.r, nx: 0, ny: -1 };
         const d = Math.sqrt(d2), pen = c.r - d;
         return { x: (dx / d) * pen, y: (dy / d) * pen, nx: dx / d, ny: dy / d };
     },
 };
 
-/* =========================================================
-   RAYS
-   Direction (dx, dy) is normalised internally.
-   Each returns {t, x, y, nx, ny} or null (t = distance).
-   ========================================================= */
 const Ray = {
     rect(ox, oy, dx, dy, r, maxDist = Infinity) {
         const len = Math.hypot(dx, dy); if (!len) return null;
         dx /= len; dy /= len;
         let tmin = 0, tmax = maxDist, nx = 0, ny = 0;
-        // X slab
+
         if (dx === 0) { if (ox < r.x || ox > r.x + r.w) return null; }
         else {
             let t1 = (r.x - ox) / dx, t2 = (r.x + r.w - ox) / dx, n = -1;
@@ -372,7 +368,7 @@ const Ray = {
             tmax = Math.min(tmax, t2);
             if (tmin > tmax) return null;
         }
-        // Y slab
+
         if (dy === 0) { if (oy < r.y || oy > r.y + r.h) return null; }
         else {
             let t1 = (r.y - oy) / dy, t2 = (r.y + r.h - oy) / dy, n = -1;
@@ -413,12 +409,11 @@ const Ray = {
         return { t, x: ox + dx * t, y: oy + dy * t, nx, ny };
     },
 
-    // Nearest hit against a mixed list of rects and circles. Adds .collider to the result.
     cast(ox, oy, dx, dy, colliders, maxDist = Infinity) {
         let best = null;
         for (const c of colliders) {
             let h = null;
-            if (c.pts) {                                        // convex polygon -> test each edge
+            if (c.pts) {
                 for (let i = 0; i < c.pts.length; i++) {
                     const a = c.pts[i], b = c.pts[(i + 1) % c.pts.length];
                     const e = Ray.segment(ox, oy, dx, dy, a.x, a.y, b.x, b.y, maxDist);
@@ -434,20 +429,14 @@ const Ray = {
         return best;
     },
 
-    // Is the straight line between two points free of colliders?
     lineOfSight(x1, y1, x2, y2, colliders) {
         return !Ray.cast(x1, y1, x2 - x1, y2 - y1, colliders, dist(x1, y1, x2, y2));
     },
 };
 
-/* =========================================================
-   TRAJECTORY CALCULATOR  (y points DOWN, gravity is positive)
-   ========================================================= */
 const Trajectory = {
     pointAt: (x, y, vx, vy, g, t) => ({ x: x + vx * t, y: y + vy * t + 0.5 * g * t * t }),
 
-    // Sampled arc, stopping at the first collider hit (if colliders given).
-    // Returns { points: [{x,y,t}], hit }
     predict(x, y, vx, vy, g, { step = 0.03, maxTime = 3, colliders = null } = {}) {
         const points = [{ x, y, t: 0 }];
         let hit = null, prev = points[0];
@@ -463,13 +452,12 @@ const Trajectory = {
     },
 
     timeToApex: (vy, g) => (vy < 0 ? -vy / g : 0),
-    apexHeight: (vy, g) => (vy < 0 ? (vy * vy) / (2 * g) : 0),          // height gained above start
+    apexHeight: (vy, g) => (vy < 0 ? (vy * vy) / (2 * g) : 0),
     apex(x, y, vx, vy, g) {
         const t = Trajectory.timeToApex(vy, g);
         return { t, ...Trajectory.pointAt(x, y, vx, vy, g, t) };
     },
 
-    // Time when the arc reaches world-y `targetY` while falling (null if never)
     timeToY(y, vy, g, targetY) {
         const a = 0.5 * g, b = vy, c = y - targetY;
         const d = b * b - 4 * a * c;
@@ -478,8 +466,6 @@ const Trajectory = {
         return t >= 0 ? t : null;
     },
 
-    // Velocity needed to go from (x,y) to (tx,ty) with a given launch speed.
-    // Returns { low, high } = { vx, vy, angle } or null if out of reach.
     solveLaunch(x, y, tx, ty, speed, g) {
         const dx = tx - x, h = -(ty - y), ax = Math.abs(dx), sgn = dx < 0 ? -1 : 1;
         if (ax < 1e-6) return null;
@@ -494,7 +480,6 @@ const Trajectory = {
         return { low: make(u1), high: make(u2) };
     },
 
-    // Slingshot: drag from (sx,sy) to (cx,cy) -> launch velocity in the opposite direction
     fromDrag(sx, sy, cx, cy, power = 5, maxSpeed = 1100) {
         let vx = (sx - cx) * power, vy = (sy - cy) * power;
         const s = Math.hypot(vx, vy);
@@ -503,9 +488,6 @@ const Trajectory = {
     },
 };
 
-/* =========================================================
-   INPUT  (pointer events, coordinates in virtual units)
-   ========================================================= */
 const Input = {
     down: false, x: 0, y: 0, startX: 0, startY: 0, released: false,
     _set(e) { this.x = e.clientX / view.scale; this.y = e.clientY / view.scale; },
@@ -513,7 +495,7 @@ const Input = {
 cvx.addEventListener("pointerdown", e => {
     e.preventDefault();
     Input._set(e);
-    if (running && state === "play" && tryUsePowerupAt(Input.x, Input.y)) return;   // tapped a power-up icon
+    if (running && state === "play" && tryUsePowerupAt(Input.x, Input.y)) return;
     cvx.setPointerCapture(e.pointerId);
     Input.startX = Input.x; Input.startY = Input.y; Input.down = true;
 });
@@ -524,63 +506,58 @@ cvx.addEventListener("pointercancel", endPointer);
 cvx.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("touchmove", e => { if (!(e.target.closest && e.target.closest(".scrollable"))) e.preventDefault(); }, { passive: false });
 
-/* =========================================================
-   GAME  (aim from a bubble / wall pad, boosters, coins)
-   ========================================================= */
 const GRAVITY = 2200;
 const WALL_W = 64;
 const PLAYER_R = 28;
-const BUBBLE_R = PLAYER_R * 1.05;          // bubbles are 5% bigger than the player
+const BUBBLE_R = PLAYER_R * 1.05;
 const BOOSTER_R = 30, COIN_R = 14;
-const BOOST_SPEED = 2100;                  // booster launches you along your last aim direction
+const BOOST_SPEED = 2100;
 const COIN_POINTS = 50;
-const POWER = 6.5, MAX_SPEED = 1600, MAX_PULL = MAX_SPEED / POWER;   // stronger shots (same drag length as before)
-const MIN_PULL = 16;                       // ignore tiny drags / taps
+const POWER = 6.5, MAX_SPEED = 1600, MAX_PULL = MAX_SPEED / POWER;
+const MIN_PULL = 16;
 const AIM_BALLS = 4;
-const CAM_SMOOTH = 5;                      // higher = snappier camera
-const WALL_BOUNCE = 2 / 3;                 // walls & obstacles: mirrored direction, 2/3 of the speed
-const BOUNCER_GAIN = 1.25;                 // green bouncers: speed multiplier on impact ...
-const BOUNCER_MIN = 1000, BOUNCER_MAX = 2000;   // ... but never weaker / stronger than this
-const OBSTACLE_START = 50, OBSTACLE_FULL = 500, OBSTACLE_MAX_CHANCE = 0.45;   // heights (score units) where air obstacles fade in
-const OBSTACLE_STICKY_CHANCE = 0.4;        // share of obstacles carrying sticky goo
-const BOUNCER_CHANCE = 0.15;               // green bouncer on a side wall (per generated bubble)
-const CENTER_SPREAD = 170;                 // bubbles stay within this distance of the screen middle
-const BOOSTER_CHANCE = 0.6;                // chance of a booster per generated bubble (max one each)
-const BOOSTER_MIN_DY = 300;                // a new booster must be at least this far above the previous booster
-const SPAWN_CLEAR_BUBBLE = 120;            // boosters keep at least this distance (centre to centre) from every bubble
-const SPAWN_CLEAR_BOOSTER = 170;           // ... and from every other booster
-const POWERUP_CHANCE = 0.12, POWERUP_MIN_DY = 1200, POWERUP_R = 28;   // rare pickups: chance per bubble, min vertical gap between two, pickup radius
-const POWER_SLOTS = 3, SLOT_R = 44, SLOT_GAP = 20, SLOT_ROW = 108;       // inventory icons along the bottom of the screen
-const SHOWER_BALLS = 20;                   // trajectory shower: balls along the predicted path (bounces included)
+const CAM_SMOOTH = 5;
+const WALL_BOUNCE = 2 / 3;
+const BOUNCER_GAIN = 1.25;
+const BOUNCER_MIN = 1000, BOUNCER_MAX = 2000;
+const OBSTACLE_START = 50, OBSTACLE_FULL = 500, OBSTACLE_MAX_CHANCE = 0.45;
+const OBSTACLE_STICKY_CHANCE = 0.4;
+const BOUNCER_CHANCE = 0.15;
+const CENTER_SPREAD = 170;
+const BOOSTER_CHANCE = 0.6;
+const BOOSTER_MIN_DY = 300;
+const SPAWN_CLEAR_BUBBLE = 120;
+const SPAWN_CLEAR_BOOSTER = 170;
+const POWERUP_CHANCE = 0.12, POWERUP_MIN_DY = 1200, POWERUP_R = 28;
+const POWER_SLOTS = 3, SLOT_R = 44, SLOT_GAP = 20, SLOT_ROW = 108;
+const SHOWER_BALLS = 20;
 const POWER_DEFS = { freeze: { color: "#6fe6ff" }, aim: { color: "#ffa51f" } };
-const COIN_CHANCE = 0.3;                   // per generated bubble
-const TRAIL_MIN = 650, TRAIL_FULL = 1900, TRAIL_LIFE = 0.5;   // speed trail: appears above TRAIL_MIN, full strength at TRAIL_FULL (units/s)
-const BUBBLE_GAP_MIN = 270, BUBBLE_GAP_MAX = 370;  // vertical distance between bubbles (bigger = fewer bubbles)
+const COIN_CHANCE = 0.3;
+const TRAIL_MIN = 650, TRAIL_FULL = 1900, TRAIL_LIFE = 0.5;
+const BUBBLE_GAP_MIN = 270, BUBBLE_GAP_MAX = 370;
 const STICKY_PAD_CHANCE = 0.2;
-const BOUNCER_UP_ANGLE = 35 * Math.PI / 180;       // green pads: hits shallower than this (vs. the pad surface) fling you straight up
+const BOUNCER_UP_ANGLE = 35 * Math.PI / 180;
 const COLOR_STICKY = "#27c6ff", COLOR_BOUNCE = "#2dff6e", COLOR_BOOST = "#ff10f0", COLOR_COIN = "#ffe600", COLOR_BUBBLE = "#bfe9ff";
 const camera = { y: 0 };
 
 let player, bubbles, boosters, coins, pads, walls, fx, obstacles;
-let trail = [];                            // recent player positions while flying fast
-let powerups = [], slots = [], lastPowerupY = 0;   // world pickups / inventory (max POWER_SLOTS) / last spawn height
-let lastBoosterY = Infinity;                // world y of the most recently spawned booster
+let trail = [];
+let powerups = [], slots = [], lastPowerupY = 0;
+let lastBoosterY = Infinity;
 let genY, lastBubble, originY, bestCamTarget, maxHeight, bonus, coinsCollected, best = Number(Store.get("best", 0)) || 0, gameTime = 0;
 let lastCoinT = -99, coinCombo = 0;
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const score = () => maxHeight + bonus;
-const canLaunch = () => player.stuck || !!player.bubble || player.frozen;     // frozen = stopped mid-air by the freeze power-up
-const strengthColor = (s, a = 1) => `hsla(${Math.round(120 * (1 - s))}, 100%, 60%, ${a})`;   // green > yellow > red
+const canLaunch = () => player.stuck || !!player.bubble || player.frozen;
+const strengthColor = (s, a = 1) => `hsla(${Math.round(120 * (1 - s))}, 100%, 60%, ${a})`;
 
-function segClosest(ax, ay, bx, by, cx, cy) {            // closest point on segment AB to point C
+function segClosest(ax, ay, bx, by, cx, cy) {
     const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
     const t = l2 ? clamp(((cx - ax) * dx + (cy - ay) * dy) / l2, 0, 1) : 0;
     return { x: ax + dx * t, y: ay + dy * t };
 }
 
-/* ---------- obstacles & collision helpers ---------- */
-// circle vs convex polygon (pts in order). Returns {x, y, nx, ny} push-out + surface normal, or null.
 function resolveCirclePoly(c, pts) {
     let best = Infinity, bx = 0, by = 0, pos = 0, neg = 0;
     for (let i = 0; i < pts.length; i++) {
@@ -593,7 +570,7 @@ function resolveCirclePoly(c, pts) {
     }
     const inside = pos === 0 || neg === 0, d = Math.sqrt(best);
     let nx, ny, push;
-    if (inside) {                                           // centre swallowed: push out through the nearest edge
+    if (inside) {
         if (d < 1e-6) { nx = 0; ny = -1; } else { nx = (bx - c.x) / d; ny = (by - c.y) / d; }
         push = d + c.r;
     } else {
@@ -611,36 +588,31 @@ function resolveCircleCircle(c, o) {
     return { x: nx * pen, y: ny * pen, nx, ny };
 }
 
-// one entry point for walls / pads (rects) and obstacles (circle / rhombus)
 function hitSolid(circ, c) {
     if (c.kind === "circle") return resolveCircleCircle(circ, c);
     if (c.kind === "rhombus") return resolveCirclePoly(circ, c.pts);
     return Collide.resolveCircleRect(circ, c);
 }
 
-// obstacles only grab the ball on the part of the rim that carries goo
 function inStickyZone(c, x = player.x, y = player.y) {
-    if (!c.kind) return true;                               // wall pads are sticky all over
+    if (!c.kind) return true;
     const a = Math.atan2(y - c.y, x - c.x);
     return Math.abs(Math.atan2(Math.sin(a - c.sa), Math.cos(a - c.sa))) <= c.sh;
 }
 
-// Mirror the velocity around the surface normal and keep WALL_BOUNCE (2/3) of the speed.
-// Green bouncers instead boost the speed.
 function bounceOff(c, r, vn) {
     const sp = Math.hypot(player.vx, player.vy);
     let rx = player.vx - 2 * vn * r.nx, ry = player.vy - 2 * vn * r.ny, k = WALL_BOUNCE;
-    const hx = player.x - r.nx * PLAYER_R, hy = player.y - r.ny * PLAYER_R;      // contact point
+    const hx = player.x - r.nx * PLAYER_R, hy = player.y - r.ny * PLAYER_R;
     if (c.bounce) {
         const out = clamp(sp * BOUNCER_GAIN, BOUNCER_MIN, BOUNCER_MAX);
-        // Shallow hit (ball skimming along the pad) -> fling it straight up.
-        // Steeper hit -> boosted mirror bounce.
+
         const shallow = Math.abs(r.nx) > 0.7 && (sp < 1 || Math.abs(vn) / sp < Math.sin(BOUNCER_UP_ANGLE));
-        if (shallow) { rx = r.nx * 0.1; ry = -1; }            // tiny nudge off the wall so it clears the pad
+        if (shallow) { rx = r.nx * 0.1; ry = -1; }
         else if (sp < 1) { rx = r.nx; ry = r.ny; }
         const rs = Math.hypot(rx, ry) || 1;
         k = out / rs;
-        c.cv = 14;                                           // kick the squash spring
+        c.cv = 14;
         fxRing(hx, hy, 10, 54, 0.35, "rgba(45,255,110,0.9)");
         fxSparks(hx, hy, 12, COLOR_BOUNCE, 320);
         Sound.play("spring");
@@ -651,38 +623,36 @@ function bounceOff(c, r, vn) {
     player.vx = rx * k; player.vy = ry * k;
 }
 
-const padFree = (left, y, h) =>                              // no other wall pad on that side within [y, y+h]?
+const padFree = (left, y, h) =>
     pads.every(p => ((p.x < VIRTUAL_W / 2) !== left) || p.y + p.h + 14 < y || y + h + 14 < p.y);
 const freeOfObstacles = (x, y, rad) => obstacles.every(o => dist(x, y, o.x, o.y) > o.br + rad + 4);
 
-// Floating circle / rhombus beside the path between two bubbles (never across it)
 function trySpawnObstacle(prev, b, dx, dy, px, py) {
     const circle = Math.random() < 0.5;
     const o = circle ? { kind: "circle", r: rand(30, 52) } : { kind: "rhombus", hw: rand(34, 56), hh: rand(46, 72) };
-    o.br = circle ? o.r : Math.max(o.hw, o.hh);               // bounding radius
+    o.br = circle ? o.r : Math.max(o.hw, o.hh);
     const s0 = Math.random() < 0.5 ? -1 : 1;
     for (const s of [s0, -s0]) {
         const t = rand(0.4, 0.6), off = s * (o.br + PLAYER_R + rand(40, 80));
         const x = clamp(prev.bx + dx * t + px * off, WALL_W + 24 + o.br + 6, VIRTUAL_W - WALL_W - 24 - o.br - 6);
         const y = prev.by + dy * t + py * off;
         const q = segClosest(prev.bx, prev.by, b.bx, b.by, x, y);
-        if (dist(q.x, q.y, x, y) < o.br + PLAYER_R + 10) continue;              // keep the path itself open
+        if (dist(q.x, q.y, x, y) < o.br + PLAYER_R + 10) continue;
         if (dist(x, y, prev.bx, prev.by) < o.br + BUBBLE_R + 25) continue;
         if (dist(x, y, b.bx, b.by) < o.br + BUBBLE_R + 25) continue;
         if (!freeOfObstacles(x, y, o.br + 60)) continue;
         o.x = x; o.y = y; o.c = 0; o.cv = 0; o.ph = Math.random() * 6.283;
         if (!circle) o.pts = [{ x, y: y - o.hh }, { x: x + o.hw, y }, { x, y: y + o.hh }, { x: x - o.hw, y }];
         o.sticky = Math.random() < OBSTACLE_STICKY_CHANCE;
-        if (o.sticky) {                                       // goo patch roughly faces the path
+        if (o.sticky) {
             o.sa = Math.atan2(q.y - y, q.x - x) + rand(-0.6, 0.6);
-            o.sh = rand(0.7, 1.0);                            // half-width of the patch (radians)
+            o.sh = rand(0.7, 1.0);
         }
         obstacles.push(o);
         return;
     }
 }
 
-/* ---------- effects ---------- */
 function fxRing(x, y, r0, r1, life, color) { fx.push({ type: "ring", x, y, r0, r1, life, t: 0, color }); }
 function fxSparks(x, y, n, color, speed) {
     for (let i = 0; i < n; i++) {
@@ -692,7 +662,6 @@ function fxSparks(x, y, n, color, speed) {
 }
 function fxText(x, y, text, color) { fx.push({ type: "text", x, y, text, life: 0.9, t: 0, color }); }
 
-// Break a disc (or just its shell) into bits of the same colour that fall down
 function fxDisintegrate(x, y, r, color, n, shell = false) {
     for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -705,7 +674,6 @@ function fxDisintegrate(x, y, r, color, n, shell = false) {
     }
 }
 
-/* ---------- world ---------- */
 function addBubble(x, y) {
     const b = { bx: x, by: y, cx: x, cy: y, r: BUBBLE_R, ph: Math.random() * 6.283, w: 0, wv: 0, ang: 0 };
     bubbles.push(b);
@@ -722,12 +690,12 @@ function resetGame() {
     maxHeight = 0; bonus = 0; coinsCollected = 0; gameTime = 0; coinCombo = 0;
     player = {
         x: VIRTUAL_W / 2, y: originY, vx: 0, vy: 0, stuck: false, stuckPad: null, bubble: null, noStick: 0, frozen: false,
-        ox: 0, oy: 0, ovx: 0, ovy: 0,                 // spring offset inside a bubble
-        pull: 0, pullV: 0, pdx: 0, pdy: 1,            // stretched "tail" while aiming (spring)
-        aimX: 0, aimY: -1,                            // last launch direction (used by boosters)
-        stickBase: 0,                                 // angle from the ball to the surface it is stuck to
-        rot: 0, spin: 0, tilt: 0,                     // skin: roll angle / spin speed / ufo tilt
-        eyeX: 0, eyeY: -0.4, blink: 1, blinkT: 2,     // skin: smoothed eye look direction + blink
+        ox: 0, oy: 0, ovx: 0, ovy: 0,
+        pull: 0, pullV: 0, pdx: 0, pdy: 1,
+        aimX: 0, aimY: -1,
+        stickBase: 0,
+        rot: 0, spin: 0, tilt: 0,
+        eyeX: 0, eyeY: -0.4, blink: 1, blinkT: 2,
     };
     player.bubble = addBubble(VIRTUAL_W / 2, originY);
     genY = originY; lastBubble = player.bubble; lastBoosterY = originY; lastPowerupY = originY;
@@ -742,35 +710,32 @@ function generate() {
     while (genY > camera.y - 900) {
         const prev = lastBubble;
         const ny = genY - rand(BUBBLE_GAP_MIN, BUBBLE_GAP_MAX);
-        // random walk that is gently pulled toward the middle
+
         const nx = clamp(prev.bx + rand(-150, 150) + (MID - prev.bx) * 0.25, MID - CENTER_SPREAD, MID + CENTER_SPREAD);
         const b = addBubble(nx, ny);
 
-        // perpendicular to the line prev -> new bubble
         const dx = nx - prev.bx, dy = ny - prev.by, len = Math.hypot(dx, dy);
         const px = -dy / len, py = dx / len;
         const sign = Math.random() < 0.5 ? -1 : 1;
 
-        // air obstacles fade in as you climb
         const hgt = (originY - ny) / 10;
         if (Math.random() < clamp((hgt - OBSTACLE_START) / (OBSTACLE_FULL - OBSTACLE_START), 0, 1) * OBSTACLE_MAX_CHANCE)
             trySpawnObstacle(prev, b, dx, dy, px, py);
 
-        // at most one booster per bubble, spaced out vertically and kept clear of everything already placed
         if (Math.random() < BOOSTER_CHANCE) {
             for (let tries = 0; tries < 8; tries++) {
                 const t = rand(0.25, 0.75), off = (tries % 2 ? -sign : sign) * rand(60, 120);
                 const bxp = clamp(prev.bx + dx * t + px * off, EDGE, VIRTUAL_W - EDGE), byp = prev.by + dy * t + py * off;
-                if (lastBoosterY - byp < BOOSTER_MIN_DY) continue;                                   // too close vertically to the last booster
+                if (lastBoosterY - byp < BOOSTER_MIN_DY) continue;
                 if (!freeOfObstacles(bxp, byp, BOOSTER_R + PLAYER_R)) continue;
-                if (bubbles.some(q => dist(q.bx, q.by, bxp, byp) < SPAWN_CLEAR_BUBBLE)) continue;   // spawn radius vs bubbles
-                if (boosters.some(o => dist(o.x, o.y, bxp, byp) < SPAWN_CLEAR_BOOSTER)) continue;   // spawn radius vs boosters
+                if (bubbles.some(q => dist(q.bx, q.by, bxp, byp) < SPAWN_CLEAR_BUBBLE)) continue;
+                if (boosters.some(o => dist(o.x, o.y, bxp, byp) < SPAWN_CLEAR_BOOSTER)) continue;
                 boosters.push({ x: bxp, y: byp, ph: Math.random() * 6.283 });
                 lastBoosterY = byp;
                 break;
             }
         }
-        if (Math.random() < COIN_CHANCE) {             // 1-2 coins on the other side
+        if (Math.random() < COIN_CHANCE) {
             const n = 1 + Math.floor(Math.random() * 2);
             for (let k = 1; k <= n; k++) {
                 const t = 0.2 + 0.6 * k / (n + 1), off = -sign * rand(30, 80);
@@ -779,7 +744,7 @@ function generate() {
                     coins.push({ x: cxp, y: cyp, ph: Math.random() * 6.283 });
             }
         }
-        if (Math.random() < POWERUP_CHANCE && lastPowerupY - ny >= POWERUP_MIN_DY) {   // rare power-up pickup
+        if (Math.random() < POWERUP_CHANCE && lastPowerupY - ny >= POWERUP_MIN_DY) {
             for (let tries = 0; tries < 8; tries++) {
                 const t = rand(0.3, 0.7), off = (tries % 2 ? -sign : sign) * rand(45, 100);
                 const xp = clamp(prev.bx + dx * t + px * off, EDGE, VIRTUAL_W - EDGE), yp = prev.by + dy * t + py * off;
@@ -792,12 +757,12 @@ function generate() {
                 break;
             }
         }
-        if (Math.random() < STICKY_PAD_CHANCE) {       // sticky pad on a side wall
+        if (Math.random() < STICKY_PAD_CHANCE) {
             const left = Math.random() < 0.5, py0 = ny - rand(20, 120);
             if (padFree(left, py0, 160))
                 pads.push({ x: left ? WALL_W : VIRTUAL_W - WALL_W - 24, y: py0, w: 24, h: 160, sticky: true, c: 0, cv: 0 });
         }
-        if (Math.random() < BOUNCER_CHANCE) {          // small green bouncer on a side wall
+        if (Math.random() < BOUNCER_CHANCE) {
             const left = Math.random() < 0.5, by0 = ny + rand(-60, 60);
             if (padFree(left, by0, 64))
                 pads.push({ x: left ? WALL_W : VIRTUAL_W - WALL_W - 22, y: by0, w: 22, h: 64, sticky: false, bounce: true, c: 0, cv: 0 });
@@ -813,7 +778,6 @@ function generate() {
     obstacles = obstacles.filter(o => o === player.stuckPad || o.y < cut);
 }
 
-// unit launch direction: live while dragging, otherwise the last one
 function currentAim() {
     if (Input.down && canLaunch()) {
         const dx = Input.startX - Input.x, dy = Input.startY - Input.y, d = Math.hypot(dx, dy);
@@ -830,10 +794,10 @@ function popBubble(b) {
 function captureBubble(b, p, vx, vy) {
     player.bubble = b;
     player.ox = p.x - b.cx; player.oy = p.y - b.cy;
-    player.ovx = vx * 0.12; player.ovy = vy * 0.12;       // leftover momentum -> bouncy settle
+    player.ovx = vx * 0.12; player.ovy = vy * 0.12;
     const sp = Math.hypot(vx, vy);
     b.ang = Math.atan2(vy, vx);
-    b.wv = -sp * 0.0045;                                   // squash along the entry direction, then wobble
+    b.wv = -sp * 0.0045;
     player.vx = player.vy = 0;
     fxRing(b.cx, b.cy, b.r * 0.6, b.r * 1.8, 0.4, "rgba(255,255,255,0.8)");
     Sound.play("bubble");
@@ -844,7 +808,6 @@ function update(dt) {
     player.noStick = Math.max(0, player.noStick - dt);
     const px = player.x, py = player.y;
 
-    // Bubble idle float + wobble spring
     for (const b of bubbles) {
         b.cx = b.bx + Math.sin(gameTime * 0.9 + b.ph) * 4;
         b.cy = b.by + Math.sin(gameTime * 1.3 + b.ph) * 6;
@@ -852,7 +815,6 @@ function update(dt) {
         b.w += b.wv * dt;
     }
 
-    // Launch
     if (Input.released) {
         const pull = dist(Input.startX, Input.startY, Input.x, Input.y);
         if (canLaunch() && pull > MIN_PULL) {
@@ -865,18 +827,17 @@ function update(dt) {
             player.noStick = 0.12;
             const s = clamp(pull / MAX_PULL, 0, 1);
             Sound.play("shoot", { volume: 0.5 + 0.5 * s, rate: 0.9 + 0.2 * s });
-            slots = slots.filter(sl => !sl.active);        // an armed trajectory shower is used up by the shot
+            slots = slots.filter(sl => !sl.active);
         }
         Input.released = false;
     }
 
-    // Stretch ("drag a part of the player back") - underdamped spring so it snaps back with a bounce
     let pullTarget = 0;
     if (Input.down && canLaunch()) {
         const pull = dist(Input.startX, Input.startY, Input.x, Input.y);
         if (pull > MIN_PULL) {
             pullTarget = clamp(pull / MAX_PULL, 0, 1);
-            player.pdx = (Input.x - Input.startX) / pull;       // tail trails toward the finger
+            player.pdx = (Input.x - Input.startX) / pull;
             player.pdy = (Input.y - Input.startY) / pull;
         }
     }
@@ -884,14 +845,14 @@ function update(dt) {
     player.pull += player.pullV * dt;
 
     if (player.bubble) {
-        // Inside a bubble: spring toward its centre
+
         const b = player.bubble;
         player.ovx += (-260 * player.ox - 14 * player.ovx) * dt;
         player.ovy += (-260 * player.oy - 14 * player.ovy) * dt;
         player.ox += player.ovx * dt; player.oy += player.ovy * dt;
         player.x = b.cx + player.ox; player.y = b.cy + player.oy;
     } else if (!player.stuck && !player.frozen) {
-        // Free flight
+
         player.vy += GRAVITY * dt;
         player.x += player.vx * dt;
         player.y += player.vy * dt;
@@ -902,19 +863,19 @@ function update(dt) {
             const r = hitSolid(circ, c);
             if (!r) continue;
             player.x += r.x; player.y += r.y;
-            if (c.sticky && player.noStick <= 0 && inStickyZone(c)) {   // grab on
+            if (c.sticky && player.noStick <= 0 && inStickyZone(c)) {
                 player.stuck = true; player.stuckPad = c; player.vx = player.vy = 0;
-                player.stickBase = Math.atan2(-r.ny, -r.nx);            // towards the surface
+                player.stickBase = Math.atan2(-r.ny, -r.nx);
                 fxRing(player.x, player.y, PLAYER_R, PLAYER_R * 2, 0.3, "rgba(39,198,255,0.8)");
                 Sound.play("stick");
                 break;
             }
-            const vn = player.vx * r.nx + player.vy * r.ny;        // bounce off everything that isn't goo
+            const vn = player.vx * r.nx + player.vy * r.ny;
             if (vn < 0) bounceOff(c, r, vn);
         }
 
         if (!player.stuck) {
-            // Boosters: push along the last aim direction
+
             for (let i = boosters.length - 1; i >= 0; i--) {
                 const o = boosters[i];
                 const q = segClosest(px, py, player.x, player.y, o.x, o.y);
@@ -927,7 +888,7 @@ function update(dt) {
                     boosters.splice(i, 1);
                 }
             }
-            // Bubbles: capture when the player's centre passes inside (swept, so fast shots can't tunnel)
+
             for (const b of bubbles) {
                 const q = segClosest(px, py, player.x, player.y, b.cx, b.cy);
                 if (dist(q.x, q.y, b.cx, b.cy) <= b.r) { captureBubble(b, q, player.vx, player.vy); break; }
@@ -935,8 +896,6 @@ function update(dt) {
         }
     }
 
-    // Sticky pads curve toward the ball (fully when stuck, a little as it approaches).
-    // Green bouncers / obstacles share the same spring (bouncers use it for their squash).
     for (const p of pads.concat(obstacles)) {
         let tgt = 0;
         if (player.stuck && p === player.stuckPad) tgt = 1;
@@ -945,11 +904,10 @@ function update(dt) {
             const dy = Math.max(p.y - player.y, 0, player.y - (p.y + p.h));
             tgt = clamp(1 - Math.hypot(dx, dy) / 120, 0, 1) * 0.5;
         }
-        p.cv += (-220 * (p.c - tgt) - 12 * p.cv) * dt;         // underdamped -> bouncy wrap
+        p.cv += (-220 * (p.c - tgt) - 12 * p.cv) * dt;
         p.c += p.cv * dt;
     }
 
-    // Coins
     for (let i = coins.length - 1; i >= 0; i--) {
         const c = coins[i];
         const q = segClosest(px, py, player.x, player.y, c.x, c.y);
@@ -964,7 +922,6 @@ function update(dt) {
         }
     }
 
-    // Power-up pickups (only while there is a free slot)
     for (let i = powerups.length - 1; i >= 0; i--) {
         const o = powerups[i];
         const q = segClosest(px, py, player.x, player.y, o.x, o.y);
@@ -979,7 +936,6 @@ function update(dt) {
     }
     for (const sl of slots) { sl.pop *= 0.9; sl.shake *= 0.88; }
 
-    // Effects
     for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i]; f.t += dt;
         if (f.type === "spark") { f.vy += 500 * dt; f.x += f.vx * dt; f.y += f.vy * dt; }
@@ -987,7 +943,6 @@ function update(dt) {
         if (f.t >= f.life) fx.splice(i, 1);
     }
 
-    // Speed trail: only while flying fast; strength follows the speed
     for (let i = trail.length - 1; i >= 0; i--) { trail[i].t += dt; if (trail[i].t >= TRAIL_LIFE) trail.splice(i, 1); }
     if (!player.bubble && !player.stuck) {
         const sp = Math.hypot(player.vx, player.vy);
@@ -996,10 +951,9 @@ function update(dt) {
 
     updateSkin(dt);
 
-    // Smooth camera (frame-rate independent), slight look-ahead in travel direction
     const playerTarget = player.y - view.h * 0.6;
     bestCamTarget = Math.min(bestCamTarget, playerTarget);
-    let target = Math.min(playerTarget, bestCamTarget + view.h * 0.3);   // limits how far it follows a fall
+    let target = Math.min(playerTarget, bestCamTarget + view.h * 0.3);
     target += clamp(player.vy * 0.08, -90, 60);
     camera.y += (target - camera.y) * (1 - Math.exp(-CAM_SMOOTH * dt));
 
@@ -1012,21 +966,17 @@ function update(dt) {
     }
 }
 
-/* =========================================================
-   VISUALS: topographic neon walls, starfield, glowing sticky objects
-   ========================================================= */
-const COLOR_ROUTE = 600;                 // height at which the wall lines reach bright yellow
-let colorProgress = 0;                   // 0..1, smoothed
+const COLOR_ROUTE = 600;
+let colorProgress = 0;
 
-// Neon-only gradient (starts white, ends bright yellow)
 const NEON_STOPS = [
-    [255, 255, 255],   // white
-    [0, 240, 255],     // neon cyan
-    [31, 81, 255],     // neon blue
-    [191, 0, 255],     // neon purple
-    [255, 16, 240],    // neon pink
-    [255, 106, 0],     // neon orange
-    [255, 255, 0],     // bright yellow
+    [255, 255, 255],
+    [0, 240, 255],
+    [31, 81, 255],
+    [191, 0, 255],
+    [255, 16, 240],
+    [255, 106, 0],
+    [255, 255, 0],
 ];
 function neonAt(q) {
     q = clamp(q, 0, 1) * (NEON_STOPS.length - 1);
@@ -1037,7 +987,6 @@ function neonAt(q) {
 const NEON_BUCKETS = 32;
 const NEON_CACHE = Array.from({ length: NEON_BUCKETS + 1 }, (_, i) => neonAt(i / NEON_BUCKETS));
 
-// --- value noise (for contour field) ---
 function hash2(x, y) {
     let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263);
     h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -1050,12 +999,11 @@ function valueNoise(x, y) {
     const a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
     return lerp(lerp(a, b, fx), lerp(c, d, fx), fy);
 }
-function terrain(x, y, t) {              // drifts slowly over time -> animated contours
+function terrain(x, y, t) {
     return 0.6 * valueNoise(x * 0.011 + t * 0.05, y * 0.011 - t * 0.07)
          + 0.4 * valueNoise(x * 0.026 - t * 0.08, y * 0.026 + t * 0.04);
 }
 
-// Marching-squares edge pairs. Edges: 0 top, 1 right, 2 bottom, 3 left
 const MS_CASES = [
     [], [[3, 0]], [[0, 1]], [[3, 1]], [[1, 2]], [[3, 0], [1, 2]], [[0, 2]], [[3, 2]],
     [[2, 3]], [[0, 2]], [[0, 1], [2, 3]], [[1, 2]], [[3, 1]], [[0, 1]], [[3, 0]], [],
@@ -1068,7 +1016,7 @@ function drawWalls(T) {
     const rows = Math.ceil(view.h / cell) + 3;
 
     for (const w of walls) {
-        // dark blue base, lighter toward the playfield
+
         const inner = w.x === 0 ? w.x + w.w : w.x;
         const outer = w.x === 0 ? w.x : w.x + w.w;
         const g = ctx.createLinearGradient(outer, 0, inner, 0);
@@ -1076,7 +1024,6 @@ function drawWalls(T) {
         ctx.fillStyle = g;
         ctx.fillRect(w.x, camera.y, w.w, view.h);
 
-        // sample the terrain field on a world-aligned grid (stable while scrolling)
         const cols = Math.round(w.w / cell), stride = cols + 1;
         const vals = new Float32Array(stride * (rows + 1));
         for (let j = 0; j <= rows; j++)
@@ -1110,7 +1057,6 @@ function drawWalls(T) {
 
     strokeContours(buckets, T);
 
-    // glowing inner edge in the current neon colour
     const k = view.dpr * view.scale;
     const edgeCol = neonAt(clamp(colorProgress + 0.05 * Math.sin(T * 1.4), 0, 1));
     ctx.save();
@@ -1122,20 +1068,18 @@ function drawWalls(T) {
     ctx.restore();
 }
 
-// strokes the neon contour buckets (shared by walls and obstacles -> identical pattern)
 function strokeContours(buckets, T) {
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const pulse = 0.85 + 0.15 * Math.sin(T * 2);
     for (let i = 0; i <= NEON_BUCKETS; i++) {
         if (!buckets[i]) continue;
         ctx.strokeStyle = NEON_CACHE[i];
-        ctx.globalAlpha = 0.18 * pulse; ctx.lineWidth = 5; ctx.stroke(buckets[i]);   // soft glow pass
-        ctx.globalAlpha = pulse; ctx.lineWidth = 1.6; ctx.stroke(buckets[i]);        // crisp line
+        ctx.globalAlpha = 0.18 * pulse; ctx.lineWidth = 5; ctx.stroke(buckets[i]);
+        ctx.globalAlpha = pulse; ctx.lineWidth = 1.6; ctx.stroke(buckets[i]);
     }
     ctx.globalAlpha = 1;
 }
 
-// Same terrain field / levels / cell size as drawWalls, for an arbitrary world-space box
 function contourInto(buckets, T, bx, by, bw, bh) {
     const cell = 8, LS = 0.07, L0 = 0.18;
     const i0 = Math.floor(bx / cell), j0 = Math.floor(by / cell);
@@ -1178,7 +1122,6 @@ function edgePoint(e, th, a, b, c, d, xl, xr, yt, yb) {
     }
 }
 
-// --- starfield: stars fall at random speeds, sway, twinkle, and respawn at random x ---
 const STAR_COLORS = ["#ffffff", "#bfe6ff", "#fff6c2", "#c9b8ff"];
 const stars = [];
 [{ n: 55, r: 0.8, par: 0.04, fall: [5, 18] }, { n: 35, r: 1.3, par: 0.10, fall: [14, 42] }, { n: 16, r: 2.0, par: 0.20, fall: [30, 85] }]
@@ -1186,8 +1129,8 @@ const stars = [];
         for (let i = 0; i < L.n; i++) stars.push({
             id: stars.length, y: Math.random(),
             r: L.r * (0.7 + Math.random() * 0.6), par: L.par,
-            dr: L.fall[0] + Math.random() * (L.fall[1] - L.fall[0]),     // own fall speed
-            sa: Math.random() * 10, sw: 0.3 + Math.random() * 0.9,        // sideways sway
+            dr: L.fall[0] + Math.random() * (L.fall[1] - L.fall[0]),
+            sa: Math.random() * 10, sw: 0.3 + Math.random() * 0.9,
             ph: Math.random() * 6.283, tw: 1 + Math.random() * 2.5,
             c: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
         });
@@ -1206,14 +1149,13 @@ function drawBackground(T) {
         const raw = s.y * view.h + T * s.dr - camera.y * s.par;
         const cycle = Math.floor(raw / view.h);
         const yy = raw - cycle * view.h;
-        const xx = hash2(cycle, s.id) * view.w + Math.sin(T * s.sw + s.ph) * s.sa;   // new random x each fall
+        const xx = hash2(cycle, s.id) * view.w + Math.sin(T * s.sw + s.ph) * s.sa;
         const tw = 0.5 + 0.5 * Math.sin(T * s.tw + s.ph);
         if (s.r > 1.6) { ctx.globalAlpha = 0.12 * tw; drawCircle(xx, yy, s.r * 3.5, s.c); }
         ctx.globalAlpha = 0.25 + 0.75 * tw;
         drawCircle(xx, yy, s.r, s.c);
     }
 
-    // occasional shooting star
     nextShoot -= dt;
     if (nextShoot <= 0) {
         const dir = Math.random() < 0.5 ? -1 : 1;
@@ -1233,7 +1175,6 @@ function drawBackground(T) {
     ctx.globalAlpha = 1;
 }
 
-// --- sticky pad: glowing capsule that curves toward / wraps around the ball ---
 function drawPad(p, T) {
     if (p.bounce) { drawBouncer(p, T); return; }
     const k = view.dpr * view.scale;
@@ -1252,13 +1193,12 @@ function drawPad(p, T) {
     ctx.restore();
 }
 
-// --- sticky cradle that wraps over the ball while it is stuck ---
 function drawCradle(T) {
     const p = player.stuckPad;
     if (!player.stuck || !p) return;
     const k = view.dpr * view.scale;
-    const base = player.stickBase;                                      // direction from ball to what it sticks to
-    const half = lerp(0.5, 1.9, clamp(p.c, 0, 1.25));                   // opens up as the pad wraps around
+    const base = player.stickBase;
+    const half = lerp(0.5, 1.9, clamp(p.c, 0, 1.25));
     ctx.save();
     ctx.lineCap = "round";
     ctx.beginPath(); ctx.arc(player.x, player.y, PLAYER_R + 3, base - half, base + half);
@@ -1267,7 +1207,6 @@ function drawCradle(T) {
     ctx.restore();
 }
 
-// --- air obstacle: wall-style contour pattern clipped to a circle / rhombus, optional sticky goo patch ---
 function obstaclePath(o) {
     ctx.beginPath();
     if (o.kind === "circle") { ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); return; }
@@ -1279,7 +1218,7 @@ function drawObstacle(o, T) {
     if (o.y + o.br < camera.y - 20 || o.y - o.br > camera.y + view.h + 20) return;
     const k = view.dpr * view.scale;
 
-    ctx.save();                                           // body + contour lines (clipped to the shape)
+    ctx.save();
     obstaclePath(o); ctx.clip();
     const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.br);
     g.addColorStop(0, "#040b24"); g.addColorStop(1, "#0d2366");
@@ -1290,13 +1229,13 @@ function drawObstacle(o, T) {
     ctx.restore();
 
     const edgeCol = neonAt(clamp(colorProgress + 0.05 * Math.sin(T * 1.4), 0, 1));
-    ctx.save();                                           // glowing rim in the current neon colour
+    ctx.save();
     ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.shadowColor = edgeCol; ctx.shadowBlur = 12 * k;
     obstaclePath(o); ctx.strokeStyle = edgeCol; ctx.lineWidth = 3; ctx.stroke();
     ctx.restore();
 
-    if (o.sticky) {                                       // goo patch only on part of the rim
+    if (o.sticky) {
         const pulse = 0.5 + 0.5 * Math.sin(T * 3 + o.ph);
         ctx.save();
         ctx.beginPath(); ctx.moveTo(o.x, o.y);
@@ -1311,12 +1250,11 @@ function drawObstacle(o, T) {
     }
 }
 
-// --- green bouncer: small glowing capsule on a side wall that bulges when hit ---
 function drawBouncer(p, T) {
     const k = view.dpr * view.scale;
     const pulse = 0.5 + 0.5 * Math.sin(T * 4 + p.y * 0.02);
-    const dir = p.x < VIRTUAL_W / 2 ? 1 : -1;             // +1 = faces right (left wall)
-    const wTot = p.w + clamp(p.c, -0.25, 1.1) * 16;       // squash / bulge from the spring
+    const dir = p.x < VIRTUAL_W / 2 ? 1 : -1;
+    const wTot = p.w + clamp(p.c, -0.25, 1.1) * 16;
     const cx = dir > 0 ? p.x + wTot / 2 : p.x + p.w - wTot / 2;
     const y0 = p.y + p.w / 2, y1 = p.y + p.h - p.w / 2;
     ctx.save();
@@ -1326,7 +1264,7 @@ function drawBouncer(p, T) {
     for (let i = 0; i < 2; i++) { ctx.shadowBlur = (12 + 14 * pulse) * k * (i ? 0.5 : 1); ctx.stroke(); }
     ctx.shadowBlur = 0;
     ctx.strokeStyle = `rgba(255,255,255,${0.3 + 0.2 * pulse})`; ctx.lineWidth = Math.max(2, wTot - 10); ctx.stroke();
-    ctx.translate(cx, (y0 + y1) / 2);                     // chevrons point away from the wall
+    ctx.translate(cx, (y0 + y1) / 2);
     if (dir < 0) ctx.scale(-1, 1);
     ctx.lineWidth = 3; ctx.strokeStyle = "#eafff0";
     [-18, 0, 18].forEach((oy, i) => {
@@ -1336,7 +1274,6 @@ function drawBouncer(p, T) {
     ctx.restore();
 }
 
-/* ---------- drawing: bubbles, boosters, coins, player, fx, HUD ---------- */
 function drawBubble(b, T) {
     const k = view.dpr * view.scale;
     const breathe = b === player.bubble ? 0 : 0.03 * Math.sin(T * 2 + b.ph);
@@ -1344,7 +1281,7 @@ function drawBubble(b, T) {
     ctx.save();
     ctx.translate(b.cx, b.cy);
     ctx.rotate(b.ang);
-    ctx.scale(1 + w, 1 / (1 + w));                       // area-preserving squash & stretch
+    ctx.scale(1 + w, 1 / (1 + w));
     const g = ctx.createRadialGradient(0, 0, b.r * 0.2, 0, 0, b.r);
     g.addColorStop(0, "rgba(140,200,255,0.03)");
     g.addColorStop(0.75, "rgba(140,210,255,0.09)");
@@ -1369,7 +1306,7 @@ function drawBooster(o, T, aim) {
     ctx.fillStyle = "rgba(255,16,240,0.18)"; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = COLOR_BOOST; ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.rotate(Math.atan2(aim.y, aim.x));                // chevrons show the direction you'd be boosted
+    ctx.rotate(Math.atan2(aim.y, aim.x));
     ctx.lineWidth = 3.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
     [-9, 5].forEach((ox, i) => {
         ctx.globalAlpha = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(T * 6 - i * 1.6 + o.ph));
@@ -1382,7 +1319,7 @@ function drawBooster(o, T, aim) {
 function drawCoin(c, T) {
     const k = view.dpr * view.scale;
     const bob = Math.sin(T * 2.5 + c.ph) * 3;
-    const sx = Math.max(0.12, Math.abs(Math.cos(T * 2.5 + c.ph * 0.5)));   // spin
+    const sx = Math.max(0.12, Math.abs(Math.cos(T * 2.5 + c.ph * 0.5)));
     ctx.save();
     ctx.shadowColor = COLOR_COIN; ctx.shadowBlur = 10 * k;
     ctx.fillStyle = COLOR_COIN;
@@ -1393,7 +1330,6 @@ function drawCoin(c, T) {
     ctx.restore();
 }
 
-// teardrop / hull path around two circles (one smooth shape, no seams)
 function hullPath(x1, y1, r1, x2, y2, r2, g = ctx) {
     const d = Math.hypot(x2 - x1, y2 - y1);
     g.beginPath();
@@ -1408,16 +1344,13 @@ function hullPath(x1, y1, r1, x2, y2, r2, g = ctx) {
     g.closePath();
 }
 
-/* =========================================================
-   SKINS  (all drawn in code; `g` is any 2D context so the menu can reuse them)
-   ========================================================= */
 const TAU = Math.PI * 2;
 const SOLID_COLORS = [
     { id: "yellow", hi: "#fff3b0", mid: "#ffc21a", lo: "#ff9d00" },
     { id: "blue",   hi: "#cfe8ff", mid: "#2d8cff", lo: "#1450d8" },
     { id: "pink",   hi: "#ffd6f0", mid: "#ff4fc0", lo: "#d01a8f" },
 ];
-// colors: has the 3-colour picker | eyes: googly eyes | fixed: art does not roll with the ball
+
 const SKINS = [
     { id: "plain",   name: "Plain",      colors: true },
     { id: "eyes",    name: "Eyes",       colors: true, eyes: true },
@@ -1450,7 +1383,6 @@ function bands(g, R, cols) {
     cols.forEach((c, i) => { g.fillStyle = c; g.fillRect(-R, -R + i * h, 2 * R, h + 1); });
 }
 
-// Art is drawn centred on (0,0), already rotated by the ball's roll (unless the skin is `fixed`)
 const ART = {
     earth(g, R) {
         g.fillStyle = "#3fae4f";
@@ -1482,7 +1414,7 @@ const ART = {
     },
     jupiter(g, R, o) {
         bands(g, R, ["#c99a6e", "#e6cba2", "#b5835a", "#f0ddb8", "#c08a5c", "#e2c49a", "#a97850"]);
-        const ph = o.rot || 0, vis = Math.cos(ph);               // red spot drifts across as the ball "spins"
+        const ph = o.rot || 0, vis = Math.cos(ph);
         if (vis > -0.2) { g.fillStyle = "#c4492f"; blob(g, Math.sin(ph) * 0.7 * R, 0.3 * R, 0.28 * R * Math.max(0.2, vis), 0.16 * R); }
     },
     saturn(g, R) { bands(g, R, ["#e6cd8f", "#d9bd7c", "#efdba6", "#d2b374", "#e6cd8f"]); },
@@ -1523,7 +1455,7 @@ const ART = {
     },
 };
 
-function saturnRing(g, x, y, R, back) {           // back half is drawn behind the planet, front half over it
+function saturnRing(g, x, y, R, back) {
     g.save(); g.translate(x, y); g.rotate(-0.38); g.lineCap = "butt";
     g.beginPath(); g.ellipse(0, 0, R * 1.7, R * 0.5, 0, back ? Math.PI : 0, back ? TAU : Math.PI);
     g.strokeStyle = "rgba(214,184,126,0.95)"; g.lineWidth = R * 0.3; g.stroke();
@@ -1535,13 +1467,13 @@ function drawUfo(g, x, y, R, o) {
     const T = o.T || 0, pull = clamp(o.pull || 0, -0.6, 1.2), k = o.k || 1;
     g.save();
     g.translate(x, y); g.rotate(clamp(o.tilt || 0, -0.4, 0.4)); g.scale(1 + 0.18 * pull, 1 - 0.12 * pull);
-    // saucer disc
+
     let gr = g.createLinearGradient(0, -R * 0.3, 0, R * 0.6);
     gr.addColorStop(0, "#eef2fa"); gr.addColorStop(1, "#7f8aa3");
     g.shadowColor = "rgba(110,255,200,0.7)"; g.shadowBlur = 14 * k;
     g.beginPath(); g.ellipse(0, R * 0.15, R * 1.3, R * 0.42, 0, 0, TAU); g.fillStyle = gr; g.fill();
     g.shadowBlur = 0;
-    // dome + little alien
+
     gr = g.createLinearGradient(0, -R * 0.7, 0, 0);
     gr.addColorStop(0, "rgba(190,250,255,0.95)"); gr.addColorStop(1, "rgba(80,190,230,0.75)");
     g.beginPath(); g.arc(0, 0, R * 0.62, Math.PI, 0); g.closePath(); g.fillStyle = gr; g.fill();
@@ -1549,7 +1481,7 @@ function drawUfo(g, x, y, R, o) {
     g.fillStyle = "#111"; dot(g, -R * 0.08, -R * 0.22, R * 0.04); dot(g, R * 0.08, -R * 0.22, R * 0.04);
     g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 1.5;
     g.beginPath(); g.arc(0, 0, R * 0.62, Math.PI, 0); g.stroke();
-    // blinking rim lights
+
     for (let i = 0; i < 5; i++) {
         const lx = (i - 2) * R * 0.5, ly = R * 0.15 + R * 0.42 * 0.8 * Math.sqrt(Math.max(0, 1 - (lx / (R * 1.3)) ** 2));
         g.fillStyle = `hsl(${(T * 140 + i * 72) % 360}, 100%, ${55 + 20 * Math.sin(T * 6 + i)}%)`;
@@ -1575,11 +1507,10 @@ function drawEyes(g, x, y, R, o) {
     }
 }
 
-// One call draws any skin. o: {T, k, rot, pull, pdx, pdy, eyeX, eyeY, blink, tilt}
 function drawBall(g, x, y, R, skinId, colorId, o = {}) {
     const sk = SKIN_BY_ID[skinId] || SKIN_BY_ID.plain;
     if (sk.id === "ufo") { drawUfo(g, x, y, R, o); return; }
-    const pull = clamp(o.pull || 0, -0.6, 1.2), sl = pull * 32;                    // stretched "tail" while aiming
+    const pull = clamp(o.pull || 0, -0.6, 1.2), sl = pull * 32;
     const c2x = x + (o.pdx || 0) * sl, c2y = y + (o.pdy || 0) * sl;
     const r2 = Math.max(R * 0.5, R * (1 - 0.3 * pull));
     g.save();
@@ -1610,8 +1541,7 @@ function drawBall(g, x, y, R, skinId, colorId, o = {}) {
     if (sk.eyes) drawEyes(g, x, y, R, o);
 }
 
-
-const EYE_RANGE = 320;                                   
+const EYE_RANGE = 320;
 function updateSkin(dt) {
     const free = !player.bubble && !player.stuck;
     player.spin += ((free ? clamp(player.vx / PLAYER_R * 0.6, -14, 14) : 0) - player.spin) * (1 - Math.exp(-6 * dt));
@@ -1622,13 +1552,13 @@ function updateSkin(dt) {
 
 function updateEyes(dt) {
     let tx = null, ty = null;
-    if (Input.down) { tx = Input.x; ty = Input.y + camera.y; }     
+    if (Input.down) { tx = Input.x; ty = Input.y + camera.y; }
     else {
-        let bd = EYE_RANGE;                                         
+        let bd = EYE_RANGE;
         const look = (x, y) => { const d = dist(player.x, player.y, x, y); if (d < bd) { bd = d; tx = x; ty = y; } };
         for (const c of coins) look(c.x, c.y);
         for (const o of boosters) look(o.x, o.y);
-        if (tx === null) {                                      
+        if (tx === null) {
             let best2 = Infinity;
             for (const b of bubbles) {
                 if (b === player.bubble) continue;
@@ -1637,14 +1567,14 @@ function updateEyes(dt) {
             }
         }
     }
-    let gx = 0, gy = -0.4;                                       
+    let gx = 0, gy = -0.4;
     if (tx !== null) {
         const dx = tx - player.x, dy = ty - player.y, d = Math.hypot(dx, dy);
         if (d > 1e-3) { const m = Math.min(1, d / 60); gx = dx / d * m; gy = dy / d * m; }
     }
-    const a = 1 - Math.exp(-9 * dt);                                         
+    const a = 1 - Math.exp(-9 * dt);
     player.eyeY += (gy - player.eyeY) * a;
-    player.blinkT -= dt;                                            
+    player.blinkT -= dt;
     if (player.blinkT < -0.16) player.blinkT = rand(2, 5);
     player.blink = player.blinkT < 0 ? 1 - Math.sin(clamp(-player.blinkT / 0.16, 0, 1) * Math.PI) : 1;
 }
@@ -1657,15 +1587,15 @@ function drawPlayer(T) {
     });
 }
 
-function drawCustomPlayer(T) {  
+function drawCustomPlayer(T) {
     const R = PLAYER_R;
     const pull = clamp(player.pull, -0.6, 1.2);
-    const sl = pull * 32; 
+    const sl = pull * 32;
     const c2x = player.x + player.pdx * sl, c2y = player.y + player.pdy * sl;
     const r2 = Math.max(R * 0.5, R * (1 - 0.3 * pull));
 
     ctx.save();
-    ctx.shadowBlur = 0;                                    
+    ctx.shadowBlur = 0;
     hullPath(player.x, player.y, R, c2x, c2y, r2);
     if (Assets.has("player")) {
         ctx.clip();
@@ -1690,7 +1620,7 @@ function slotCenter(i) {
     return { x: (view.w - total) / 2 + SLOT_R + i * (SLOT_R * 2 + SLOT_GAP), y: view.h - 28 - SLOT_R };
 }
 
-function tryUsePowerupAt(x, y) {   
+function tryUsePowerupAt(x, y) {
     for (let i = 0; i < slots.length; i++) {
         const c = slotCenter(i);
         if (dist(x, y, c.x, c.y) <= SLOT_R + 10) return usePowerup(i);
@@ -1701,7 +1631,7 @@ function tryUsePowerupAt(x, y) {
 function usePowerup(i) {
     const s = slots[i];
     if (!s) return false;
-    if (!powerUsable(s)) { s.shake = 1; return true; }  
+    if (!powerUsable(s)) { s.shake = 1; return true; }
     if (s.type === "freeze") {
         player.frozen = true; player.vx = player.vy = 0;
         slots.splice(i, 1);
@@ -1728,11 +1658,10 @@ function bounceVelocity(c, r, vx, vy, vn) {
     return { vx: rx * k, vy: ry * k };
 }
 
-
 function simulateShot(x, y, vx, vy, count, spacing) {
     const balls = [], bounces = [], used = new Set();
     const solids = walls.concat(pads, obstacles);
-    const sp0 = Math.hypot(vx, vy) || 1, ax = vx / sp0, ay = vy / sp0;     
+    const sp0 = Math.hypot(vx, vy) || 1, ax = vx / sp0, ay = vy / sp0;
     const circ = { x, y, r: PLAYER_R };
     let travelled = 0, next = PLAYER_R + 14, end = null;
     for (let step = 0; step < 420 && balls.length < count && !end; step++) {
@@ -1778,7 +1707,7 @@ function simulateShot(x, y, vx, vy, count, spacing) {
 function drawShower(vx, vy, s) {
     const { balls, bounces, end } = simulateShot(player.x, player.y, vx, vy, SHOWER_BALLS, lerp(30, 52, s));
     ctx.lineWidth = 2;
-    for (const b of bounces) {                                             
+    for (const b of bounces) {
         ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, Math.PI * 2); ctx.strokeStyle = "#fff"; ctx.stroke();
     }
     balls.forEach((p, i) => {
@@ -1793,17 +1722,16 @@ function drawShower(vx, vy, s) {
     ctx.globalAlpha = 1;
 }
 
-
 function drawPowerBadge(g, type, R, T, active) {
     const col = POWER_DEFS[type].color, k = view.dpr * view.scale, pulse = 0.5 + 0.5 * Math.sin(T * 4);
     g.save();
     g.shadowColor = col; g.shadowBlur = (active ? 24 + 10 * pulse : 10 + 6 * pulse) * k;
     g.beginPath(); g.arc(0, 0, R, 0, TAU);
-    g.fillStyle = "rgba(8,14,40,0.78)"; g.fill();                          
+    g.fillStyle = "rgba(8,14,40,0.78)"; g.fill();
     g.lineWidth = active ? 5 : 3.5; g.strokeStyle = col; g.stroke();
     g.shadowBlur = 0;
     g.lineCap = "round"; g.lineJoin = "round";
-    if (type === "freeze") {                                           
+    if (type === "freeze") {
         g.strokeStyle = "#eafcff"; g.lineWidth = Math.max(2, R * 0.09);
         for (let i = 0; i < 6; i++) {
             g.save(); g.rotate(i * Math.PI / 3);
@@ -1811,7 +1739,7 @@ function drawPowerBadge(g, type, R, T, active) {
             g.moveTo(-R * 0.17, -R * 0.5); g.lineTo(0, -R * 0.36); g.lineTo(R * 0.17, -R * 0.5);
             g.stroke(); g.restore();
         }
-    } else {                                                       
+    } else {
         for (let i = 0; i < 6; i++) {
             const u = i / 5;
             g.fillStyle = `rgba(255,255,255,${1 - 0.13 * i})`;
@@ -1821,11 +1749,11 @@ function drawPowerBadge(g, type, R, T, active) {
     g.restore();
 }
 
-function drawPowerup(o, T) {                                             
+function drawPowerup(o, T) {
     const bob = Math.sin(T * 2.5 + o.ph) * 5;
     ctx.save();
     ctx.translate(o.x, o.y + bob);
-    ctx.save(); ctx.rotate(T * 0.9);                                       
+    ctx.save(); ctx.rotate(T * 0.9);
     ctx.setLineDash([7, 9]); ctx.lineWidth = 2.5; ctx.strokeStyle = POWER_DEFS[o.type].color; ctx.globalAlpha = 0.8;
     ctx.beginPath(); ctx.arc(0, 0, POWERUP_R + 11, 0, TAU); ctx.stroke();
     ctx.restore();
@@ -1833,10 +1761,10 @@ function drawPowerup(o, T) {
     ctx.restore();
 }
 
-function drawPowerSlots(T) {                                               
+function drawPowerSlots(T) {
     for (let i = 0; i < POWER_SLOTS; i++) {
         const c = slotCenter(i), s = slots[i];
-        if (!s) {                                                          
+        if (!s) {
             ctx.save(); ctx.beginPath(); ctx.arc(c.x, c.y, SLOT_R - 6, 0, TAU);
             ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.stroke(); ctx.restore();
             continue;
@@ -1850,7 +1778,7 @@ function drawPowerSlots(T) {
     }
 }
 
-function drawFrozen(T) {                                                  
+function drawFrozen(T) {
     if (!player.frozen) return;
     const k = view.dpr * view.scale, R = PLAYER_R + 9, pulse = 0.5 + 0.5 * Math.sin(T * 3);
     ctx.save();
@@ -1862,7 +1790,7 @@ function drawFrozen(T) {
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(220,250,255,0.9)"; ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(235,252,255,0.9)";
-    for (let i = 0; i < 6; i++) {                                         
+    for (let i = 0; i < 6; i++) {
         ctx.save(); ctx.rotate(i * Math.PI / 3 + T * 0.3);
         ctx.beginPath(); ctx.moveTo(R - 2, 0); ctx.lineTo(R + 8, -4); ctx.lineTo(R + 16, 0); ctx.lineTo(R + 8, 4); ctx.closePath(); ctx.fill();
         ctx.restore();
@@ -1871,24 +1799,23 @@ function drawFrozen(T) {
     if (!Input.down) drawText("FROZEN \u2022 DRAG TO SHOOT", player.x, player.y - PLAYER_R - 34, 20, `rgba(201,244,255,${0.6 + 0.4 * pulse})`, "center", "Arial", "bold");
 }
 
-
 function drawTrail() {
     if (trail.length < 2) return;
     let run = [trail[0]];
     for (let i = 1; i < trail.length; i++) {
-        if (trail[i - 1].t - trail[i].t > 0.05) { if (run.length > 1) drawTrailRun(run); run = []; }   // gap = separate flight
+        if (trail[i - 1].t - trail[i].t > 0.05) { if (run.length > 1) drawTrailRun(run); run = []; }
         run.push(trail[i]);
     }
     if (run.length > 1) drawTrailRun(run);
 }
 
-function drawTrailRun(pts) {                   
+function drawTrailRun(pts) {
     const n = pts.length, L = [], Rr = [], k = view.dpr * view.scale;
     for (let i = 0; i < n; i++) {
         const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
         const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
         const p = pts[i], age = p.t / TRAIL_LIFE;
-        const hw = PLAYER_R * 0.85 * (1 - age) * (0.35 + 0.65 * p.s);       // narrows with age, wider when faster
+        const hw = PLAYER_R * 0.85 * (1 - age) * (0.35 + 0.65 * p.s);
         L.push({ x: p.x - dy / d * hw, y: p.y + dx / d * hw });
         Rr.push({ x: p.x + dy / d * hw, y: p.y - dx / d * hw });
     }
@@ -1905,7 +1832,7 @@ function drawTrailRun(pts) {
     ctx.shadowColor = `hsl(${hue}, 100%, 60%)`; ctx.shadowBlur = 14 * k * head.s;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);                      
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
     const cg = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
     cg.addColorStop(0, `rgba(255,255,255,${0.35 + 0.45 * head.s})`); cg.addColorStop(1, "rgba(255,255,255,0)");
@@ -1945,7 +1872,7 @@ function drawHUD() {
     if (Math.abs(s - shownScore) < 0.5) shownScore = s;
     scorePop *= 0.9;
 
-    const cx = view.w / 2, baseY = view.h - 30 - SLOT_ROW;      // HUD sits above the power-up icon row
+    const cx = view.w / 2, baseY = view.h - 30 - SLOT_ROW;
     drawText("BEST " + best + "   \u2022   HEIGHT " + maxHeight + "   \u2022   COINS " + coinsCollected,
         cx, baseY, 22, "rgba(255,255,255,0.75)", "center");
 
@@ -1965,7 +1892,6 @@ function render() {
 
     drawBackground(T);
 
-
     ctx.save();
     ctx.translate(0, -camera.y);
 
@@ -1978,21 +1904,20 @@ function render() {
     for (const o of boosters) drawBooster(o, T, aim);
     for (const b of bubbles) if (b !== player.bubble) drawBubble(b, T);
 
-
     if (Input.down && canLaunch()) {
         const pull = dist(Input.startX, Input.startY, Input.x, Input.y);
         if (pull > MIN_PULL) {
             const s = clamp(pull / MAX_PULL, 0, 1);
             const v = Trajectory.fromDrag(Input.startX, Input.startY, Input.x, Input.y, POWER, MAX_SPEED);
             const speed = Math.hypot(v.vx, v.vy);
-            const assist = aimAssistOn();  
+            const assist = aimAssistOn();
             if (assist) drawShower(v.vx, v.vy, s);
             const { points, hit } = Trajectory.predict(player.x, player.y, v.vx, v.vy, GRAVITY, {
                 colliders: walls.concat(pads, obstacles), maxTime: 1.5, step: 0.02,
             });
             const tMax = hit ? points[points.length - 1].t : Infinity;
-            const t0 = (PLAYER_R + 12) / speed;         
-            const gap = lerp(14, 32, s) / speed;        
+            const t0 = (PLAYER_R + 12) / speed;
+            const gap = lerp(14, 32, s) / speed;
             for (let i = 0; i < (assist ? 0 : AIM_BALLS); i++) {
                 const t = t0 + i * gap;
                 if (t > tMax) break;
@@ -2002,11 +1927,11 @@ function render() {
         }
     }
 
-    drawTrail();                                          
+    drawTrail();
     drawPlayer(T);
-    drawCradle(T);                                      
-    drawFrozen(T);                                       
-    if (player.bubble) drawBubble(player.bubble, T);     
+    drawCradle(T);
+    drawFrozen(T);
+    if (player.bubble) drawBubble(player.bubble, T);
     drawFx();
 
     ctx.restore();
@@ -2015,9 +1940,8 @@ function render() {
     drawPowerSlots(T);
 }
 
-
 const STEP = 1 / 60;
-let last = 0, acc = 0, running = false, state = "play"; 
+let last = 0, acc = 0, running = false, state = "play";
 
 function loop(now) {
     if (!running) return;
@@ -2027,7 +1951,6 @@ function loop(now) {
     render();
     requestAnimationFrame(loop);
 }
-
 
 const menuEl = document.getElementById("menu");
 const prevCv = document.getElementById("skinPreview");
@@ -2065,7 +1988,7 @@ function refreshMenu() {
     for (const b of swatchesEl.children) b.classList.toggle("sel", b.dataset.id === Skin.color);
     for (const e of skinButtons) {
         e.b.classList.toggle("sel", e.s.id === Skin.id);
-        if (e.s.colors) drawThumb(e);                       // colour changes only affect these
+        if (e.s.colors) drawThumb(e);
     }
     Store.set("skin", Skin.id); Store.set("color", Skin.color);
 }
@@ -2099,14 +2022,14 @@ function initMenu() {
 function menuLoop(now) {
     if (!inMenu) return;
     const T = now / 1000, dt = clamp(T - menuLast, 0, 0.05); menuLast = T;
-    drawBackground(T);                                      // same starfield as the game
+    drawBackground(T);
 
     const dpr = view.dpr, w = prevCv.clientWidth, h = prevCv.clientHeight;
     if (prevCv.width !== Math.round(w * dpr)) { prevCv.width = Math.round(w * dpr); prevCv.height = Math.round(h * dpr); }
     const g = prevCv.getContext("2d");
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
 
-    const rc = prevCv.getBoundingClientRect();              // eyes follow the finger / mouse
+    const rc = prevCv.getBoundingClientRect();
     const dx = menuPtr.x - (rc.left + w / 2), dy = menuPtr.y - (rc.top + h / 2), d = Math.hypot(dx, dy) || 1, m = Math.min(1, d / 120);
     const a = 1 - Math.exp(-9 * dt);
     mp.eyeX += (dx / d * m - mp.eyeX) * a; mp.eyeY += (dy / d * m - mp.eyeY) * a;
@@ -2129,14 +2052,13 @@ function showMenu() {
     requestAnimationFrame(menuLoop);
 }
 
-/* =========================================================
-   START
-   ========================================================= */
 startBtn.disabled = true;
 startBtn.textContent = "Loading...";
 Promise.all([Assets.load(ASSET_MANIFEST), Sound.load(SOUND_MANIFEST)]).then(() => {
     startBtn.disabled = false;
     startBtn.textContent = "Start Game";
+    const savedMusic = Store.get("music", "none");
+    if ([...music_selected.options].some(o => o.value === savedMusic)) music_selected.value = savedMusic;
     initMenu();
 });
 
@@ -2144,7 +2066,7 @@ startBtn.addEventListener("click", async () => {
     try { await document.documentElement.requestFullscreen(); } catch (e) { console.log(e); }
     try { await screen.orientation.lock("portrait"); } catch (e) {}
     endMenu();
-    Sound.unlock().then(() => Sound.music("music"));   // needs this tap to be allowed
+    Sound.playMusic(music_selected.value);
     resize();
     resetGame();
     state = "play"; acc = 0;
@@ -2153,9 +2075,6 @@ startBtn.addEventListener("click", async () => {
     requestAnimationFrame(loop);
 });
 
-/* =========================================================
-   GAME OVER  (blurred game behind, score in the middle, Restart / Back)
-   ========================================================= */
 const overEl = document.getElementById("gameOver");
 const goScoreEl = document.getElementById("goScore");
 const goBestEl = document.getElementById("goBest");
@@ -2166,7 +2085,7 @@ let goAnim = 0;
 function gameOver() {
     state = "over";
     const final = score();
-    const isNew = final > savedBest && final > 0;           // check before saveBest() updates savedBest
+    const isNew = final > savedBest && final > 0;
     saveBest();
     Input.down = false; Input.released = false;
     Sound.play("lose");
@@ -2175,7 +2094,7 @@ function gameOver() {
     goBestEl.classList.toggle("new", isNew);
     overEl.classList.add("show");
 
-    const t0 = performance.now(), dur = 700;                // quick count-up
+    const t0 = performance.now(), dur = 700;
     const id = ++goAnim;
     (function tick(now) {
         if (id !== goAnim) return;
@@ -2199,3 +2118,11 @@ backBtn.addEventListener("click", () => {
     Sound.stopMusic();
     showMenu();
 });
+
+const howEl = document.getElementById("howTo");
+function openHow() { howEl.classList.add("show"); howEl.querySelector(".howBody").scrollTop = 0; }
+function closeHow() { howEl.classList.remove("show"); }
+document.getElementById("howButton").addEventListener("click", openHow);
+document.getElementById("howClose").addEventListener("click", closeHow);
+howEl.addEventListener("click", e => { if (e.target === howEl) closeHow(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeHow(); });
